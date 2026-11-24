@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-resolution-workflow"
+version = "0.1.0"
+description = "Customer resolution agent in the spirit of the n8n demo: a conversational agent checks policies and orders, then calls a deterministic Process Resolution Request workflow that validates the resolution and writes a pending_review record — it never issues refunds or ships replacements."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Bala Sai Kunapareddi" }]
+dependencies = [
+    "google-adk>=1.0",
+    "litellm>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+resolution-demo = "agent_resolution_workflow.demo:main"
+resolution-chat = "agent_resolution_workflow.__main__:chat_main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

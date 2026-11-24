@@ -1,0 +1,11 @@
+order_id,customer_name,customer_email,item,item_price,status,order_date,promised_date,delivered_date
+CM-1042,Maya Chen,maya.chen@example.com,Ceramic Pour-Over Coffee Set,89.99,delivered,2026-11-05,2026-11-10,2026-11-10
+CM-1043,Daniel Okafor,daniel.okafor@example.com,Wireless Noise-Cancelling Headphones,149.00,delivered,2026-10-28,2026-11-04,2026-11-12
+CM-1044,Priya Nair,priya.nair@example.com,Stainless Steel Water Bottle 1L,24.50,delivered,2026-11-12,2026-11-15,2026-11-15
+CM-1045,Tom Becker,tom.becker@example.com,Linen Throw Blanket,59.00,delivered,2026-09-20,2026-10-05,2026-10-05
+CM-1046,Sara Kim,sara.kim@example.com,Bamboo Cutting Board Set,34.99,delivered,2026-11-14,2026-11-19,2026-11-19
+CM-1047,Alex Rivera,alex.rivera@example.com,LED Desk Lamp,45.00,in_transit,2026-11-20,2026-11-24,
+CM-1048,Grace Liu,grace.liu@example.com,Cotton Bath Towel Set,39.99,delivered,2026-11-08,2026-11-13,2026-11-13
+CM-1049,James Park,james.park@example.com,Trail Running Shoes,119.95,cancelled,2026-11-02,2026-11-09,
+CM-1050,Fatima Hassan,fatima.hassan@example.com,Insulated Lunch Box,29.99,delivered,2026-11-16,2026-11-21,2026-11-21
+CM-1051,Noah Williams,noah.williams@example.com,Ceramic Pour-Over Coffee Set,89.99,delivered,2026-11-15,2026-11-20,2026-11-20

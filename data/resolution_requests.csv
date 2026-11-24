@@ -1,0 +1,2 @@
+request_id,order_id,customer_email,issue_category,requested_resolution,status,agent_note,created_at
+RR-0001,CM-1048,grace.liu@example.com,late_delivery,store_credit,pending_review,Customer asked for store credit after a late delivery.,2026-11-20T10:15:00
