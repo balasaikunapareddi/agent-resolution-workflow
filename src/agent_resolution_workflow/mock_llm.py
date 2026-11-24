@@ -30,14 +30,30 @@ CONFIRM_WORDS = (
     "yes please",
     "please go ahead",
     "go ahead",
-    "confirm",
-    "confirmed",
     "please do",
     "sounds good",
     "that's right",
     "that's correct",
     "yes, go ahead",
 )
+
+# Words that negate a confirmation. Checked BEFORE the confirm words:
+# "don't go ahead" contains "go ahead" as a substring, and "I need to
+# confirm my address" contains "confirm" — neither is a confirmation.
+NEGATION_WORDS = (
+    "don't", "do not", "dont", "not yet", "no,", "never", "stop",
+    "cancel", "not now", "hold on",
+)
+
+
+def _is_confirmation(text: str) -> bool:
+    lowered = text.strip().lower()
+    if lowered.rstrip(".") in ("yes", "yeah", "yep", "confirm", "confirmed",
+                               "ok", "okay", "sure", "please do"):
+        return True
+    if any(neg in lowered for neg in NEGATION_WORDS):
+        return False
+    return any(word in lowered for word in CONFIRM_WORDS)
 
 
 def _text_parts(request: LlmRequest) -> list[tuple[str, str]]:
@@ -118,13 +134,6 @@ def _call(name: str, args: dict) -> LlmResponse:
         ),
         turn_complete=True,
     )
-
-
-def _is_confirmation(text: str) -> bool:
-    lowered = text.strip().lower()
-    if lowered in ("yes", "yeah", "yep", "yes."):
-        return True
-    return any(word in lowered for word in CONFIRM_WORDS)
 
 
 def _last_mentioned(texts: list[str], extract) -> str | None:

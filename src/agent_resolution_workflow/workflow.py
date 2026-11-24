@@ -20,12 +20,16 @@ Validation order (first failure wins, with a typed reason):
    the same resolution.
 
 ``STORE_TODAY`` is the store's reference date for the demo data (the shipped
-orders are dated around it). Pass ``today`` explicitly to evaluate against a
-different date.
+orders are dated around it). The demo pins it explicitly (see ``demo.py``);
+the workflow itself defaults to the real current date — an earlier version
+defaulted to the frozen STORE_TODAY, which made the 30-day window check
+meaningless in real use (orders delivered after 2026-11-24 always passed).
+Pass ``today`` explicitly to evaluate against a different date.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -102,10 +106,21 @@ class WorkflowResult:
         }
 
 
-def _days_between(start: str, end: date) -> int | None:
-    if not start:
+def _parse_date(value: str) -> date | None:
+    """Parse a YYYY-MM-DD date, or None when it is empty or malformed."""
+    if not value:
         return None
-    return (end - date.fromisoformat(start)).days
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _days_between(start: str, end: date) -> int | None:
+    parsed = _parse_date(start)
+    if parsed is None:
+        return None
+    return (end - parsed).days
 
 
 def process_resolution_request(
@@ -113,9 +128,14 @@ def process_resolution_request(
     ledger: Ledger,
     orders: list[Order] | None = None,
     policies: dict[str, Policy] | None = None,
-    today: date = STORE_TODAY,
+    today: date | None = None,
 ) -> WorkflowResult:
-    """Validate a resolution request and, if valid, record it as pending_review."""
+    """Validate a resolution request and, if valid, record it as pending_review.
+
+    ``today`` defaults to the real current date; pass a date explicitly
+    (the demo passes STORE_TODAY) for a reproducible evaluation.
+    """
+    today = today or date.today()
     order = find_order(request.order_id, orders)
     if order is None:
         return WorkflowResult(
@@ -172,7 +192,8 @@ def process_resolution_request(
             ),
         )
     if policy.category == "late_delivery":
-        days_late = _days_between(order.promised_date, date.fromisoformat(order.delivered_date))
+        delivered = _parse_date(order.delivered_date)
+        days_late = _days_between(order.promised_date, delivered) if delivered else None
         if days_late is None or days_late < 5:
             return WorkflowResult(
                 ok=False,
@@ -204,14 +225,29 @@ def process_resolution_request(
                 "pending review, so a second one was not recorded."
             ),
         )
-    row = ledger.add(
-        order_id=order.order_id,
-        customer_email=order.customer_email,
-        issue_category=policy.category,
-        requested_resolution=resolution,
-        agent_note=request.agent_note,
-        created_at=datetime.now().isoformat(timespec="seconds"),
-    )
+    try:
+        row = ledger.add(
+            order_id=order.order_id,
+            customer_email=order.customer_email,
+            issue_category=policy.category,
+            requested_resolution=resolution,
+            agent_note=request.agent_note,
+            created_at=datetime.now().isoformat(timespec="seconds"),
+        )
+    except sqlite3.IntegrityError:
+        # The ledger enforces uniqueness of (order, resolution) among
+        # pending rows at the DB level (see ledger.py): if the check above
+        # raced with a concurrent insert, the insert fails here instead of
+        # recording a duplicate. Report it as a duplicate, not a crash.
+        return WorkflowResult(
+            ok=False,
+            status="rejected",
+            reason="duplicate_pending",
+            message=(
+                f"A {resolution} request for order {order.order_id} is already "
+                "pending review, so a second one was not recorded."
+            ),
+        )
     return WorkflowResult(
         ok=True,
         status="recorded",

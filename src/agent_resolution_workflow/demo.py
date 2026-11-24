@@ -22,6 +22,7 @@ from .orders import load_orders
 from .policies import load_policies
 from .ledger import Ledger
 from .tools import Store
+from .workflow import STORE_TODAY
 
 SCRIPTED_TURNS = [
     "Hi, my order CM-1042 arrived damaged.",
@@ -35,15 +36,19 @@ def fresh_demo_store() -> Store:
 
     The ledger is still seeded with the one prior row from
     data/resolution_requests.csv, so the demo shows RR-0001 already pending
-    and records the new request as RR-0002.
+    and records the new request as RR-0002. The reference date is pinned
+    to STORE_TODAY so the 30-day window checks are reproducible no matter
+    when the demo runs; the workflow itself defaults to the real date.
     """
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
-    return Store(orders=load_orders(), policies=load_policies(), ledger=Ledger(tmp.name))
+    return Store(orders=load_orders(), policies=load_policies(),
+                 ledger=Ledger(tmp.name), today=STORE_TODAY)
 
 
 def run_demo(live: bool = False, store: Store | None = None, verbose: bool = True) -> dict:
     """Run the scripted conversation; return a summary dict for tests."""
+    created_store = store is None
     agent = ResolutionAgent(live=live, store=store or fresh_demo_store())
     turns: list[dict] = []
     if verbose:
@@ -62,6 +67,14 @@ def run_demo(live: bool = False, store: Store | None = None, verbose: bool = Tru
         "ledger_rows": rows,
         "new_request": new_rows[-1] if new_rows else None,
     }
+    if created_store:
+        # The demo ledger was a throwaway temp file (delete=False so
+        # SQLite could open it): close it and remove it, or every demo
+        # run leaves a .db file behind in /tmp.
+        try:
+            agent.store.ledger.close()
+        finally:
+            Path(agent.store.ledger.db_path).unlink(missing_ok=True)
     if verbose:
         print("\n" + "-" * 60)
         print("LEDGER (resolution_requests):")

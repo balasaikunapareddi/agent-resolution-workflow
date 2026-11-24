@@ -9,29 +9,41 @@ or by tests). The order and policy tools are read-only; only
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from .ledger import Ledger
 from .orders import Order, find_order, load_orders
 from .policies import Policy, get_policy as _get_policy_record, load_policies
-from .workflow import ResolutionRequest, process_resolution_request as _run_workflow
+from .workflow import (
+    STORE_TODAY,
+    ResolutionRequest,
+    process_resolution_request as _run_workflow,
+)
 
 DEFAULT_DB = Path(__file__).resolve().parents[2] / "data" / "resolution_requests.db"
 
 
 @dataclass
 class Store:
-    """Everything the tools need: orders, policies, the ledger."""
+    """Everything the tools need: orders, policies, the ledger.
+
+    ``today`` is the reference date the workflow validates window checks
+    against. None means the real current date; the demo sets it to
+    STORE_TODAY so the shipped order dates stay reproducible.
+    """
 
     orders: list[Order]
     policies: dict[str, Policy]
     ledger: Ledger
+    today: date | None = None
 
     @classmethod
-    def load(cls, db_path: Path | str = DEFAULT_DB) -> "Store":
+    def load(cls, db_path: Path | str = DEFAULT_DB, today: date | None = None) -> "Store":
         """Load the shipped store (CSV orders, Markdown policies, SQLite ledger)."""
-        return cls(orders=load_orders(), policies=load_policies(), ledger=Ledger(db_path))
+        return cls(orders=load_orders(), policies=load_policies(),
+                   ledger=Ledger(db_path), today=today)
 
 
 _DEFAULT_STORE: Store | None = None
@@ -132,5 +144,6 @@ def process_resolution_request(
         ledger=store.ledger,
         orders=store.orders,
         policies=store.policies,
+        today=store.today,
     )
     return result.to_dict()

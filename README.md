@@ -140,12 +140,16 @@ LEDGER: RR-0001 | CM-1048 | store_credit | pending_review | late_delivery
 On top of that, `guard_reply` checks every final reply: when a request was
 recorded the reply must say it was recorded for review, and it must never
 claim a replacement was sent, a refund was issued, or credit was applied.
-A reply that breaks either rule is replaced with a safe confirmation.
+The check is pattern-based, not a fixed phrase list — a live model can
+paraphrase around any fixed list ("your refund is on its way" used to slip
+through), so the patterns match the claim shapes (refund/replacement/credit
++ a movement verb). A reply that breaks either rule is replaced with a
+safe confirmation.
 
 ## Tests
 
 ```bash
-pytest -q   # 52 offline tests, deterministic scripted mock LLMs, no key needed
+pytest -q   # 65 offline tests, deterministic scripted mock LLMs, no key needed
 ```
 
 Coverage: order lookup, policy retrieval (right policy for damaged vs
@@ -176,6 +180,15 @@ the first live attempt returned the raw order dump as the reply; (2) the
 live coordinator spots a duplicate from the conversation history and
 explains it without needing a confirmation round-trip.
 
+Re-verified after an independent code review on Tue 2026-11-24 (29.6 s,
+same checks, report `.runs/live/attempt-3/report.json`): the review fixed
+the reply guardrail (pattern-based, not a fixed phrase list), the
+`history()` session lookup, the workflow's reference date (now the real
+current date, demo pins STORE_TODAY), malformed-date handling, and a
+DB-level duplicate guarantee. One review note from that run: the model
+once cited the request id as "RR-1042" alongside the real RR-0002 — the
+workflow returns the correct id; the prose garbling is model noise.
+
 ## How this differs from agent-support-resolution
 
 Bala's earlier repo is LangGraph + policy-as-code with a $50 refund cap and
@@ -192,10 +205,14 @@ the only writer.
   the point — and the limit.
 - The workflow is a Python function in this repo, not an n8n workflow.
   The pattern is the same; the runtime is not.
-- The store's reference date is fixed at 2026-11-24 (`STORE_TODAY` in
-  `workflow.py`) so the shipped order dates and the 30-day window checks
-  are deterministic. A real deployment would use today's date.
-- The demo ledger is a throwaway SQLite file so the demo is repeatable;
-  `chat` mode uses the persistent `data/resolution_requests.db`.
+- The demo pins the store's reference date at 2026-11-24 (`STORE_TODAY` in
+  `workflow.py`, set on the demo store) so the shipped order dates and the
+  30-day window checks are deterministic whenever the demo runs. The
+  workflow itself defaults to the real current date — an earlier version
+  defaulted to the frozen date, which made the window check meaningless in
+  real use.
+- The demo ledger is a throwaway SQLite file so the demo is repeatable, and
+  it is deleted when the demo ends; `chat` mode uses the persistent
+  `data/resolution_requests.db`.
 - Session memory is ADK's in-memory session service: it lasts for the
   process, not across restarts.

@@ -65,6 +65,22 @@ class Ledger:
             )"""
         )
         self._conn.commit()
+        # The duplicate guarantee is enforced at the DB level, not just by
+        # the check-then-act in workflow.py: at most one pending row per
+        # (order, resolution). A racing second insert fails with
+        # IntegrityError, which the workflow reports as duplicate_pending.
+        # A legacy DB that already holds duplicates cannot take the index;
+        # in that case the workflow's check still guards, so init must not
+        # crash here.
+        try:
+            self._conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_unique
+                   ON resolution_requests(order_id, requested_resolution)
+                   WHERE status = 'pending_review'"""
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
         if seed_csv is not None and self.count() == 0:
             self._seed_from_csv(Path(seed_csv))
 
@@ -73,17 +89,21 @@ class Ledger:
             return
         with open(csv_path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
+                # Skip malformed seed rows instead of crashing Store load
+                # on a missing column; the shipped CSV is well-formed.
+                if not row.get("request_id") or not row.get("order_id"):
+                    continue
                 self._conn.execute(
                     "INSERT OR IGNORE INTO resolution_requests VALUES (?,?,?,?,?,?,?,?)",
                     (
                         row["request_id"],
                         row["order_id"],
-                        row["customer_email"],
-                        row["issue_category"],
-                        row["requested_resolution"],
-                        row["status"],
+                        row.get("customer_email", ""),
+                        row.get("issue_category", ""),
+                        row.get("requested_resolution", ""),
+                        row.get("status", "pending_review"),
                         row.get("agent_note", ""),
-                        row["created_at"],
+                        row.get("created_at", ""),
                     ),
                 )
         self._conn.commit()

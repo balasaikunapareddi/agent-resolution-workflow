@@ -44,7 +44,9 @@ def _parse_policy(text: str) -> Policy:
     if not (category and allowed and window):
         raise ValueError("Policy file is missing Category / Allowed resolutions / Window headers")
     return Policy(
-        category=category.group(1).strip(),
+        # Lowercased: get_policy() lowercases its lookup, so a file that
+        # wrote "Category: Damaged_Defective" would otherwise never match.
+        category=category.group(1).strip().lower(),
         allowed_resolutions=[r.strip().lower() for r in allowed.group(1).split(",")],
         window_days=int(window.group(1)),
         text=text.strip(),
@@ -73,13 +75,18 @@ def find_policy_for(text: str, policies: dict[str, Policy] | None = None) -> Pol
 
     Returns None when nothing matches. Ties resolve in the fixed order of
     CATEGORY_KEYWORDS, so the result is deterministic.
+
+    Keywords match at a word boundary (``\\blate``): a plain substring
+    match would map "please translate this" to the late_delivery policy,
+    because "late" sits inside "translate".
     """
     lowered = text.lower()
     table = policies if policies is not None else load_policies()
     best: Policy | None = None
     best_hits = 0
     for category, keywords in CATEGORY_KEYWORDS.items():
-        hits = sum(1 for kw in keywords if kw in lowered)
+        hits = sum(1 for kw in keywords
+                   if re.search(r"\b" + re.escape(kw), lowered))
         if hits > best_hits and category in table:
             best, best_hits = table[category], hits
     return best

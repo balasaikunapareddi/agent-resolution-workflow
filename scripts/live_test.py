@@ -31,7 +31,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent_resolution_workflow.agent import FORBIDDEN_CLAIMS, ResolutionAgent
+from agent_resolution_workflow.agent import (
+    ResolutionAgent,
+    contains_forbidden_claim,
+)
 from agent_resolution_workflow.demo import fresh_demo_store
 from agent_resolution_workflow.workflow import ResolutionRequest, process_resolution_request
 
@@ -63,10 +66,18 @@ def main() -> int:
     check(store.ledger.count() == 1, "turn 1 records nothing", f"ledger={store.ledger.count()}")
 
     # Turn 2 — chooses a resolution. Must ask for confirmation, record nothing.
+    # The confirmation question can be phrased many ways ("is that correct?",
+    # "shall I record it?") — accept any of them, not just the word "confirm":
+    # an earlier live run failed here only because the model asked "is that
+    # correct?" instead of using the word "confirm".
     reply2 = agent.run("I would like a replacement.")
     report["turns"].append({"customer": "I would like a replacement.", "agent": reply2})
     print(f"[live] turn 2 reply: {reply2}")
-    check("confirm" in reply2.lower(), "turn 2 asks for confirmation", reply2[:160])
+    confirm_phrases = ("confirm", "is that correct", "is this correct",
+                       "shall i", "would you like me to", "should i go ahead",
+                       "go ahead?")
+    check(any(p in reply2.lower() for p in confirm_phrases),
+          "turn 2 asks for confirmation", reply2[:160])
     check(store.ledger.count() == 1, "turn 2 records nothing before confirmation", f"ledger={store.ledger.count()}")
 
     # Turn 3 — confirms. The workflow must record exactly one pending row.
@@ -83,7 +94,7 @@ def main() -> int:
     check("recorded for review" in reply3.lower(), "turn 3 says recorded for review", reply3[:200])
     check(row.request_id in reply3, "turn 3 cites the request id", reply3[:200])
     check(
-        not any(phrase in reply3.lower() for phrase in FORBIDDEN_CLAIMS),
+        not contains_forbidden_claim(reply3),
         "turn 3 never claims shipment/refund",
         reply3[:200],
     )

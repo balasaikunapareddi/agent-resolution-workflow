@@ -40,23 +40,36 @@ class Order:
 
 
 def load_orders(csv_path: Path | str = ORDERS_CSV) -> list[Order]:
-    """Load every order from the CSV. Raises FileNotFoundError if missing."""
+    """Load every order from the CSV. Raises FileNotFoundError if missing.
+
+    A malformed row (missing column, bad price) raises a ValueError naming
+    the file and row instead of a bare KeyError/ValueError from the csv
+    module — a bad data file should fail loudly and precisely.
+    """
     orders: list[Order] = []
     with open(csv_path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            orders.append(
-                Order(
-                    order_id=row["order_id"].strip(),
-                    customer_name=row["customer_name"].strip(),
-                    customer_email=row["customer_email"].strip(),
-                    item=row["item"].strip(),
-                    item_price=float(row["item_price"]),
-                    status=row["status"].strip(),
-                    order_date=row["order_date"].strip(),
-                    promised_date=(row.get("promised_date") or "").strip(),
-                    delivered_date=(row.get("delivered_date") or "").strip(),
+        reader = csv.DictReader(f)
+        for n, row in enumerate(reader, start=2):  # header is row 1
+            try:
+                orders.append(
+                    Order(
+                        order_id=row["order_id"].strip(),
+                        customer_name=row["customer_name"].strip(),
+                        customer_email=row["customer_email"].strip(),
+                        item=row["item"].strip(),
+                        item_price=float(row["item_price"]),
+                        status=row["status"].strip(),
+                        order_date=row["order_date"].strip(),
+                        promised_date=(row.get("promised_date") or "").strip(),
+                        delivered_date=(row.get("delivered_date") or "").strip(),
+                    )
                 )
-            )
+            except (KeyError, ValueError, AttributeError) as e:
+                raise ValueError(
+                    f"{csv_path}: row {n} is malformed ({e}); "
+                    "expected order_id, customer_name, customer_email, item, "
+                    "item_price, status, order_date, promised_date, delivered_date"
+                ) from e
     return orders
 
 

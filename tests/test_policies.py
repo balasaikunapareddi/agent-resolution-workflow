@@ -54,3 +54,22 @@ def test_find_policy_for_return_words():
 
 def test_find_policy_for_unrelated_words_returns_none():
     assert find_policy_for("What are your opening hours?") is None
+
+
+def test_policy_category_is_case_insensitive(tmp_path):
+    """Review fix: the parsed category was not lowercased, so a file with
+    'Category: Damaged_Defective' never matched a lowercased lookup."""
+    from agent_resolution_workflow.policies import _parse_policy
+    text = ("# Test\n\nCategory: Damaged_Defective\n"
+            "Allowed resolutions: replacement\nWindow: 30 days\n")
+    policy = _parse_policy(text)
+    assert policy.category == "damaged_defective"
+
+
+def test_find_policy_ignores_substring_inside_other_words():
+    """Review fix: plain substring matching mapped 'please translate
+    this' to late_delivery, because 'late' sits inside 'translate'."""
+    from agent_resolution_workflow.policies import find_policy_for
+    assert find_policy_for("please translate this document") is None
+    assert find_policy_for("my item arrived damaged") is not None
+    assert find_policy_for("my item arrived damaged").category == "damaged_defective"

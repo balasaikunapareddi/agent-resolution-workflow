@@ -47,3 +47,19 @@ def test_to_dict_is_json_friendly():
     assert data["status"] == "delivered"
     assert data["promised_date"] == "2026-11-04"
     assert data["delivered_date"] == "2026-11-12"
+
+
+def test_malformed_csv_row_raises_a_clear_error(tmp_path):
+    """Review fix: a bad price or missing column used to raise a bare
+    KeyError/ValueError with no file or row context."""
+    import pytest
+    from agent_resolution_workflow.orders import load_orders
+    bad = tmp_path / "orders.csv"
+    bad.write_text(
+        "order_id,customer_name,customer_email,item,item_price,status,order_date,promised_date,delivered_date\n"
+        "CM-9999,Test User,test@example.com,Widget,not-a-price,delivered,2026-11-01,2026-11-05,2026-11-05\n"
+    )
+    with pytest.raises(ValueError) as exc:
+        load_orders(bad)
+    assert "row 2" in str(exc.value)
+    assert "orders.csv" in str(exc.value)

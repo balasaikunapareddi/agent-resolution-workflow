@@ -1,8 +1,6 @@
 """The multi-agent loop (mock mode): conversation, memory, rejections."""
 
-from agent_resolution_workflow.agent import FORBIDDEN_CLAIMS
-
-FORBIDDEN = FORBIDDEN_CLAIMS + ("has been sent", "on its way")
+from agent_resolution_workflow.agent import contains_forbidden_claim
 
 
 def test_scripted_demo_flow_records_one_pending_review(agent, store):
@@ -22,7 +20,7 @@ def test_scripted_demo_flow_records_one_pending_review(agent, store):
     assert row.status == "pending_review"
     assert row.issue_category == "damaged_defective"
     for reply in (reply1, reply2, reply3):
-        assert not any(phrase in reply.lower() for phrase in FORBIDDEN)
+        assert not contains_forbidden_claim(reply)
 
 
 def test_session_memory_remembers_the_order_across_turns(agent, store):
@@ -90,4 +88,18 @@ def test_agent_never_claims_shipment_across_the_full_flow(agent, store):
     ]
     for reply in replies:
         lowered = reply.lower()
-        assert not any(phrase in lowered for phrase in FORBIDDEN)
+        assert not contains_forbidden_claim(lowered)
+
+
+def test_history_returns_the_conversation(agent):
+    """Review fix: history() called ADK's async get_session synchronously,
+    so it returned an un-awaited coroutine and silently [] forever."""
+    assert agent.history() == []  # no session yet
+    agent.run("Hi, my order CM-1042 arrived damaged.")
+    agent.run("I would like a replacement.")
+    history = agent.history()
+    assert len(history) >= 4  # user + model turns, both directions
+    texts = " ".join(h["text"] for h in history)
+    assert "CM-1042" in texts
+    roles = {h["role"] for h in history}
+    assert "user" in roles and "model" in roles

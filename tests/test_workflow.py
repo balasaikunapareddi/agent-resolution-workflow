@@ -212,3 +212,63 @@ def test_normalize_resolution_synonyms():
     assert normalize_resolution("refund the shipping") == "shipping_refund"
     assert normalize_resolution("I would like a refund of the shipping cost.") == "shipping_refund"
     assert normalize_resolution("send me a unicorn") is None
+
+
+def test_malformed_dates_are_a_rejection_not_a_crash(store):
+    """Review fix: a malformed promised/delivered date raised ValueError
+    out of the workflow instead of a typed rejection."""
+    from agent_resolution_workflow.orders import Order
+    bad = Order(order_id="CM-1042", customer_name="Maya Chen",
+                customer_email="maya.chen@example.com",
+                item="Ceramic Pour-Over Coffee Set", item_price=89.99,
+                status="delivered", order_date="2026-11-05",
+                promised_date="not-a-date", delivered_date="also-bad")
+    result = process_resolution_request(
+        req("CM-1042", "maya.chen@example.com", "late_delivery", "shipping_refund"),
+        ledger=store.ledger, orders=[bad], policies=store.policies, today=TODAY,
+    )
+    assert not result.ok
+    assert result.reason in ("condition_not_met", "outside_window")
+
+
+def test_duplicate_is_rejected_even_if_the_check_races(store, monkeypatch):
+    """Review fix: the duplicate guarantee was check-then-act only — two
+    concurrent inserts could both record. The ledger now enforces
+    uniqueness at the DB level, and the workflow reports the racing
+    insert as duplicate_pending instead of crashing."""
+    from agent_resolution_workflow.ledger import Ledger
+    # A pending row already exists (seed RR-0001 is CM-1048/store_credit);
+    # record one for CM-1042, then simulate the check racing past it.
+    first = process_resolution_request(
+        req("CM-1042", "maya.chen@example.com", "damaged_defective", "replacement"),
+        ledger=store.ledger, orders=store.orders, policies=store.policies, today=TODAY,
+    )
+    assert first.ok
+    monkeypatch.setattr(store.ledger, "find_pending", lambda *a, **k: None)
+    again = process_resolution_request(
+        req("CM-1042", "maya.chen@example.com", "damaged_defective", "replacement"),
+        ledger=store.ledger, orders=store.orders, policies=store.policies, today=TODAY,
+    )
+    assert not again.ok and again.reason == "duplicate_pending"
+    assert store.ledger.count() == 2  # seed + the one recorded row
+
+
+def test_workflow_default_today_is_the_real_date(store, monkeypatch):
+    """Review fix: the workflow defaulted to the frozen STORE_TODAY, so the
+    30-day window check was meaningless in real use. The default is now
+    the real current date; the demo pins STORE_TODAY explicitly."""
+    from datetime import date as real_date
+    from agent_resolution_workflow import workflow as wf
+
+    class FakeDate(real_date):
+        @classmethod
+        def today(cls):
+            return real_date(2027, 6, 1)
+
+    monkeypatch.setattr(wf, "date", FakeDate)
+    # CM-1042 was delivered 2026-11-10: 203 days before the faked today.
+    result = process_resolution_request(
+        req("CM-1042", "maya.chen@example.com", "damaged_defective", "replacement"),
+        ledger=store.ledger, orders=store.orders, policies=store.policies,
+    )
+    assert not result.ok and result.reason == "outside_window"

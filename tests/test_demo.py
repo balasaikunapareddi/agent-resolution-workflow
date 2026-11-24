@@ -58,3 +58,16 @@ def test_demo_runs_the_scripted_flow_and_records_one_row():
     assert summary["new_request"]["order_id"] == "CM-1042"
     assert summary["new_request"]["requested_resolution"] == "replacement"
     assert summary["new_request"]["status"] == "pending_review"
+
+
+def test_demo_removes_its_throwaway_ledger_file():
+    """Review fix: fresh_demo_store created a temp .db with delete=False
+    and nothing ever removed it — one file per demo run in /tmp."""
+    import glob
+    import os
+    import tempfile
+    from agent_resolution_workflow.demo import run_demo
+    before = set(glob.glob(os.path.join(tempfile.gettempdir(), "*.db")))
+    run_demo(live=False, verbose=False)
+    after = set(glob.glob(os.path.join(tempfile.gettempdir(), "*.db")))
+    assert after <= before, f"demo left temp db files: {after - before}"

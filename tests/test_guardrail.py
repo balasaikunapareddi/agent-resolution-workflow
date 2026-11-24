@@ -44,3 +44,33 @@ def test_bad_claim_without_a_record_is_replaced_too():
 def test_ordinary_reply_without_a_record_passes_through():
     reply = "Could you share your order number so I can look it up?"
     assert guard_reply(reply, record_created=False) == reply
+
+
+def test_paraphrased_false_claims_are_caught_without_a_record():
+    """Review fix: the guardrail listed ten exact phrases, so a live model
+    could paraphrase around it. These all passed through unchanged before
+    the fix — each claims money or goods moved with nothing recorded."""
+    for reply in (
+        "Your refund is on its way to your card.",
+        "We've sent your replacement already.",
+        "The credit has been added to your account.",
+        "Your replacement is being prepared and will ship soon.",
+        "Good news, your refund was processed this morning.",
+    ):
+        fixed = guard_reply(reply, record_created=False)
+        assert "pending review" in fixed, reply
+        # The original false claim is gone (the safe text itself says
+        # "nothing has been sent", so check the claim's wording, not the
+        # word "sent").
+        assert reply.lower() not in fixed.lower(), reply
+        assert "on its way to your card" not in fixed.lower(), reply
+        assert "will ship soon" not in fixed.lower(), reply
+
+
+def test_legitimate_recorded_reply_still_passes_through():
+    reply = (
+        "Thanks for confirming. Your replacement request for order CM-1042 "
+        "has been recorded for review — request RR-0002. A human reviews it "
+        "before anything is sent or refunded."
+    )
+    assert guard_reply(reply, record_created=True, request_id="RR-0002") == reply
