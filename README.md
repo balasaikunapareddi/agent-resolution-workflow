@@ -5,10 +5,9 @@ agent checks policies and orders, then calls a deterministic **Process
 Resolution Request** workflow that validates the resolution and writes a
 `pending_review` record — it never issues refunds or ships replacements.
 
-Inspired by the `customer_resolution_agent` in
-[Sumanth077/Hands-On-AI-Engineering](https://github.com/Sumanth077/Hands-On-AI-Engineering/tree/main/ai_agents/customer_resolution_agent)
-(an n8n no-code agent for the fictional store Northstar Goods). This is the
-code equivalent of that idea — same pattern, built with Google ADK in Python.
+This project builds the conversational-resolution pattern in code — a
+conversational front end over a deterministic workflow, built with Google
+ADK in Python for the fictional store Northstar Goods.
 
 ## The problem
 
